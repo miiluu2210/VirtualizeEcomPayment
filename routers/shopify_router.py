@@ -15,7 +15,8 @@ from shared.data_generator import (
     SHARED_PRODUCTS, SHARED_STAFF, SHARED_CUSTOMERS,
     get_random_product, get_random_customer, get_random_staff,
     generate_transaction_id, generate_shared_products, generate_shared_customers,
-    generate_shared_staff, DATA_DIR, GENERATION_STATUS
+    generate_shared_staff, DATA_DIR, GENERATION_STATUS,
+    ensure_products_loaded, ensure_staff_loaded
 )
 
 router = APIRouter()
@@ -178,10 +179,13 @@ async def get_products(
     offset: int = Query(0, ge=0)
 ):
     """Get products with Vietnamese tech focus"""
+    # Try to load products from file if not in memory
+    ensure_products_loaded()
+
     if not SHARED_PRODUCTS:
         return {
             "status": "error",
-            "msg": "Products not generated yet. Please generate products first.",
+            "msg": "No products data found. Please generate products first via /shopify/generate/products",
             "data": None,
             "count": 0
         }
@@ -205,15 +209,27 @@ async def get_orders(
     batch_num = ((page - 1) * limit) // ORDER_BATCH_SIZE
     offset_in_batch = ((page - 1) * limit) % ORDER_BATCH_SIZE
 
+    # Try to load orders from file
     orders = load_order_batch(batch_num)
     if not orders:
-        return {
-            "status": "warning",
-            "msg": "Orders not generated yet. Please generate orders first.",
-            "data": [],
-            "count": 0,
-            "page": page
-        }
+        # Check if any order files exist
+        order_files = list(ORDERS_DIR.glob("*.json.gz"))
+        if not order_files:
+            return {
+                "status": "error",
+                "msg": "No orders data found. Please generate orders first via /shopify/generate/orders",
+                "data": [],
+                "count": 0,
+                "page": page
+            }
+        else:
+            return {
+                "status": "warning",
+                "msg": f"Order batch {batch_num} not found. Available batches: 0 to {len(order_files)-1}",
+                "data": [],
+                "count": 0,
+                "page": page
+            }
 
     if payment_status:
         orders = [o for o in orders if o.get("payment_status") == payment_status]
@@ -231,10 +247,13 @@ async def get_orders(
 @router.get("/admin/api/2024-01/staff", response_model=StandardResponse)
 async def get_staff():
     """Get all staff members"""
+    # Try to load staff from file if not in memory
+    ensure_staff_loaded()
+
     if not SHARED_STAFF:
         return {
             "status": "error",
-            "msg": "Staff not generated yet. Please generate staff first.",
+            "msg": "No staff data found. Please generate staff first via /shopify/generate/staff",
             "data": None,
             "count": 0
         }
@@ -252,30 +271,39 @@ async def get_staff():
 @router.get("/generate/products", response_model=StandardResponse)
 async def generate_products_endpoint(
     count: int = Query(1000, ge=100, le=5000, description="Number of products to generate"),
-    new: bool = Query(False, description="If True, delete existing data and generate new. If False, keep existing data.")
+    method: Optional[str] = Query(None, description="Generation method: 'new' to append new data, 'no' or None to keep existing data")
 ):
-    """Generate product catalog"""
+    """Generate product catalog
+
+    Parameters:
+    - method='new': Generate and append new products to existing data
+    - method='no' or None: Keep existing data without generating new
+    """
     try:
-        # Check if data already exists
-        if GENERATION_STATUS["products"]["generated"] and not new:
+        # Ensure existing data is loaded
+        ensure_products_loaded()
+
+        # Check if data already exists and method is not 'new'
+        if GENERATION_STATUS["products"]["generated"] and method != "new":
             return {
                 "status": "warning",
-                "msg": "Products already exist. Use 'new=true' parameter to generate new data and replace existing.",
+                "msg": "Products already exist. Use 'method=new' parameter to generate and append new data.",
                 "data": {
                     "count": len(SHARED_PRODUCTS),
-                    "hint": "Add parameter: new=true to regenerate"
+                    "hint": "Add parameter: method=new to append more products"
                 },
                 "count": len(SHARED_PRODUCTS)
             }
 
-        # Clear existing data if new=true
-        if new and GENERATION_STATUS["products"]["generated"]:
-            print("🗑️  Clearing existing products...")
-            from shared.data_generator import clear_generated_data
-            clear_generated_data("products")
-
-        # Generate new products
-        products = generate_shared_products(count)
+        # Generate new products with appropriate mode
+        if method == "new":
+            # Append mode
+            products = generate_shared_products(count, mode="append")
+            msg = f"Successfully appended {count} new products. Total: {len(products)}"
+        else:
+            # Replace mode (first time generation)
+            products = generate_shared_products(count, mode="replace")
+            msg = f"Successfully generated {len(products)} products"
 
         # Update the module-level SHARED_PRODUCTS
         import shared.data_generator as dg
@@ -283,11 +311,12 @@ async def generate_products_endpoint(
 
         return {
             "status": "success",
-            "msg": f"Successfully generated {len(products)} products" + (" (replaced existing)" if new else ""),
+            "msg": msg,
             "data": {
-                "generated": len(products),
-                "replaced": new,
-                "sample": products[:5]
+                "total": len(products),
+                "newly_generated": count if method == "new" else len(products),
+                "mode": "append" if method == "new" else "replace",
+                "sample": products[-5:] if method == "new" else products[:5]
             },
             "count": len(products)
         }
@@ -303,24 +332,32 @@ async def generate_products_endpoint(
 async def generate_customers_endpoint(
     background_tasks: BackgroundTasks,
     count: int = Query(2_000_000, ge=1000, le=5_000_000, description="Number of customers to generate"),
-    new: bool = Query(False, description="If True, delete existing data and generate new")
+    method: Optional[str] = Query(None, description="Generation method: 'new' to generate new data (replace), 'no' or None to keep existing data")
 ):
-    """Generate customer database"""
+    """Generate customer database
+
+    Parameters:
+    - method='new': Generate new customers (replaces all existing data)
+    - method='no' or None: Keep existing data without generating new
+
+    Note: Customers are generated in batches and stored in separate files.
+    Append mode is not supported for customers due to batch file management complexity.
+    """
     try:
-        # Check if data already exists
-        if GENERATION_STATUS["customers"]["generated"] and not new:
+        # Check if data already exists and method is not 'new'
+        if GENERATION_STATUS["customers"]["generated"] and method != "new":
             return {
                 "status": "warning",
-                "msg": "Customers already exist. Use 'new=true' parameter to generate new data and replace existing.",
+                "msg": "Customers already exist. Use 'method=new' parameter to regenerate all customer data.",
                 "data": {
                     "count": GENERATION_STATUS["customers"]["count"],
-                    "hint": "Add parameter: new=true to regenerate"
+                    "hint": "Add parameter: method=new to regenerate (warning: will replace all existing customers)"
                 },
                 "count": GENERATION_STATUS["customers"]["count"]
             }
 
-        # Clear existing data if new=true
-        if new and GENERATION_STATUS["customers"]["generated"]:
+        # Clear existing data if method='new'
+        if method == "new" and GENERATION_STATUS["customers"]["generated"]:
             print("🗑️  Clearing existing customers...")
             from shared.data_generator import clear_generated_data
             clear_generated_data("customers")
@@ -332,10 +369,10 @@ async def generate_customers_endpoint(
 
         return {
             "status": "success",
-            "msg": f"Customer generation started in background for {count:,} customers" + (" (will replace existing)" if new else ""),
+            "msg": f"Customer generation started in background for {count:,} customers" + (" (will replace existing)" if method == "new" else ""),
             "data": {
                 "target": count,
-                "replaced": new,
+                "mode": "replace",
                 "estimated_time": "5-10 minutes"
             }
         }
@@ -350,30 +387,39 @@ async def generate_customers_endpoint(
 @router.get("/generate/staff", response_model=StandardResponse)
 async def generate_staff_endpoint(
     count: int = Query(300, ge=50, le=1000, description="Number of staff to generate"),
-    new: bool = Query(False, description="If True, delete existing data and generate new")
+    method: Optional[str] = Query(None, description="Generation method: 'new' to append new data, 'no' or None to keep existing data")
 ):
-    """Generate staff members"""
+    """Generate staff members
+
+    Parameters:
+    - method='new': Generate and append new staff to existing data
+    - method='no' or None: Keep existing data without generating new
+    """
     try:
-        # Check if data already exists
-        if GENERATION_STATUS["staff"]["generated"] and not new:
+        # Ensure existing data is loaded
+        ensure_staff_loaded()
+
+        # Check if data already exists and method is not 'new'
+        if GENERATION_STATUS["staff"]["generated"] and method != "new":
             return {
                 "status": "warning",
-                "msg": "Staff already exist. Use 'new=true' parameter to generate new data and replace existing.",
+                "msg": "Staff already exist. Use 'method=new' parameter to generate and append new data.",
                 "data": {
                     "count": len(SHARED_STAFF),
-                    "hint": "Add parameter: new=true to regenerate"
+                    "hint": "Add parameter: method=new to append more staff"
                 },
                 "count": len(SHARED_STAFF)
             }
 
-        # Clear existing data if new=true
-        if new and GENERATION_STATUS["staff"]["generated"]:
-            print("🗑️  Clearing existing staff...")
-            from shared.data_generator import clear_generated_data
-            clear_generated_data("staff")
-
-        # Generate new staff
-        staff = generate_shared_staff(count)
+        # Generate new staff with appropriate mode
+        if method == "new":
+            # Append mode
+            staff = generate_shared_staff(count, mode="append")
+            msg = f"Successfully appended {count} new staff members. Total: {len(staff)}"
+        else:
+            # Replace mode (first time generation)
+            staff = generate_shared_staff(count, mode="replace")
+            msg = f"Successfully generated {len(staff)} staff members"
 
         # Update the module-level SHARED_STAFF
         import shared.data_generator as dg
@@ -381,11 +427,12 @@ async def generate_staff_endpoint(
 
         return {
             "status": "success",
-            "msg": f"Successfully generated {len(staff)} staff members" + (" (replaced existing)" if new else ""),
+            "msg": msg,
             "data": {
-                "generated": len(staff),
-                "replaced": new,
-                "sample": staff[:5]
+                "total": len(staff),
+                "newly_generated": count if method == "new" else len(staff),
+                "mode": "append" if method == "new" else "replace",
+                "sample": staff[-5:] if method == "new" else staff[:5]
             },
             "count": len(staff)
         }

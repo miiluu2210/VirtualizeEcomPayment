@@ -14,7 +14,8 @@ import json
 from shared.data_generator import (
     SHARED_PRODUCTS, SHARED_STAFF, SHARED_LOCATIONS,
     get_random_product, get_random_customer, get_random_staff, get_random_location,
-    generate_transaction_id, generate_shared_locations, DATA_DIR, fake_vi, GENERATION_STATUS
+    generate_transaction_id, generate_shared_locations, DATA_DIR, fake_vi, GENERATION_STATUS,
+    ensure_products_loaded, ensure_staff_loaded, ensure_locations_loaded
 )
 
 router = APIRouter()
@@ -205,10 +206,13 @@ async def sapo_info():
 @router.get("/admin/locations", response_model=StandardResponse)
 async def get_locations():
     """Get all store locations"""
+    # Try to load locations from file if not in memory
+    ensure_locations_loaded()
+
     if not SHARED_LOCATIONS:
         return {
-            "status": "warning",
-            "msg": "Locations not generated yet. Please generate locations first.",
+            "status": "error",
+            "msg": "No locations data found. Please generate locations first via /sapo/generate/locations",
             "data": [],
             "count": 0
         }
@@ -227,10 +231,13 @@ async def get_products(
     offset: int = Query(0, ge=0)
 ):
     """Get products"""
+    # Try to load products from file if not in memory
+    ensure_products_loaded()
+
     if not SHARED_PRODUCTS:
         return {
             "status": "error",
-            "msg": "Products not generated yet. Please generate products first.",
+            "msg": "No products data found. Please generate products first via /shopify/generate/products",
             "data": [],
             "count": 0
         }
@@ -249,10 +256,13 @@ async def get_staff(
     location_id: int = Query(None, description="Filter by location")
 ):
     """Get staff members"""
+    # Try to load staff from file if not in memory
+    ensure_staff_loaded()
+
     if not SHARED_STAFF:
         return {
             "status": "error",
-            "msg": "Staff not generated yet. Please generate staff first.",
+            "msg": "No staff data found. Please generate staff first via /shopify/generate/staff",
             "data": [],
             "count": 0
         }
@@ -277,15 +287,27 @@ async def get_orders(
     batch_num = ((page - 1) * limit) // ORDER_BATCH_SIZE
     offset_in_batch = ((page - 1) * limit) % ORDER_BATCH_SIZE
 
+    # Try to load orders from file
     orders = load_order_batch(batch_num)
     if not orders:
-        return {
-            "status": "warning",
-            "msg": "Orders not generated yet. Please generate orders first.",
-            "data": [],
-            "count": 0,
-            "page": page
-        }
+        # Check if any order files exist
+        order_files = list(ORDERS_DIR.glob("*.json.gz"))
+        if not order_files:
+            return {
+                "status": "error",
+                "msg": "No orders data found. Please generate orders first via /sapo/generate/orders",
+                "data": [],
+                "count": 0,
+                "page": page
+            }
+        else:
+            return {
+                "status": "warning",
+                "msg": f"Order batch {batch_num} not found. Available batches: 0 to {len(order_files)-1}",
+                "data": [],
+                "count": 0,
+                "page": page
+            }
 
     # Apply filters
     if location_id:
@@ -308,19 +330,40 @@ async def get_orders(
 @router.post("/generate/locations", response_model=StandardResponse)
 @router.get("/generate/locations", response_model=StandardResponse)
 async def generate_locations_endpoint(
-    count: int = Query(50, ge=10, le=100, description="Number of locations to generate")
+    count: int = Query(50, ge=10, le=100, description="Number of locations to generate"),
+    method: Optional[str] = Query(None, description="Generation method: 'new' to append new data, 'no' or None to keep existing data")
 ):
-    """Generate Vietnam store locations"""
+    """Generate Vietnam store locations
+
+    Parameters:
+    - method='new': Generate and append new locations to existing data
+    - method='no' or None: Keep existing data without generating new
+    """
     try:
-        if GENERATION_STATUS["locations"]["generated"]:
+        # Ensure existing data is loaded
+        ensure_locations_loaded()
+
+        # Check if data already exists and method is not 'new'
+        if GENERATION_STATUS["locations"]["generated"] and method != "new":
             return {
                 "status": "warning",
-                "msg": "Locations already generated. Delete existing data to regenerate.",
-                "data": {"count": len(SHARED_LOCATIONS)},
+                "msg": "Locations already exist. Use 'method=new' parameter to generate and append new data.",
+                "data": {
+                    "count": len(SHARED_LOCATIONS),
+                    "hint": "Add parameter: method=new to append more locations"
+                },
                 "count": len(SHARED_LOCATIONS)
             }
 
-        locations = generate_shared_locations(count)
+        # Generate new locations with appropriate mode
+        if method == "new":
+            # Append mode
+            locations = generate_shared_locations(count, mode="append")
+            msg = f"Successfully appended {count} new locations. Total: {len(locations)}"
+        else:
+            # Replace mode (first time generation)
+            locations = generate_shared_locations(count, mode="replace")
+            msg = f"Successfully generated {len(locations)} store locations"
 
         # Update the module-level SHARED_LOCATIONS
         import shared.data_generator as dg
@@ -328,10 +371,12 @@ async def generate_locations_endpoint(
 
         return {
             "status": "success",
-            "msg": f"Successfully generated {len(locations)} store locations",
+            "msg": msg,
             "data": {
-                "generated": len(locations),
-                "sample": locations[:5]
+                "total": len(locations),
+                "newly_generated": count if method == "new" else len(locations),
+                "mode": "append" if method == "new" else "replace",
+                "sample": locations[-5:] if method == "new" else locations[:5]
             },
             "count": len(locations)
         }

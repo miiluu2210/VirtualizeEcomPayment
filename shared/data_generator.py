@@ -107,12 +107,75 @@ def generate_product_name(category, brand, model):
     }
     return names.get(category, f"{brand} {model}")
 
-def generate_shared_products(count=1000):
-    """Generate shared product catalog for all data sources"""
+# Helper functions to ensure data is loaded
+def ensure_products_loaded():
+    """Ensure products are loaded into memory from file if available"""
     global SHARED_PRODUCTS
+    if not SHARED_PRODUCTS:
+        products_file = DATA_DIR / "products.json.gz"
+        if products_file.exists():
+            SHARED_PRODUCTS = load_compressed(products_file)
+            if SHARED_PRODUCTS:
+                GENERATION_STATUS["products"]["generated"] = True
+                GENERATION_STATUS["products"]["count"] = len(SHARED_PRODUCTS)
+
+def ensure_staff_loaded():
+    """Ensure staff are loaded into memory from file if available"""
+    global SHARED_STAFF
+    if not SHARED_STAFF:
+        staff_file = DATA_DIR / "staff.json.gz"
+        if staff_file.exists():
+            SHARED_STAFF = load_compressed(staff_file)
+            if SHARED_STAFF:
+                GENERATION_STATUS["staff"]["generated"] = True
+                GENERATION_STATUS["staff"]["count"] = len(SHARED_STAFF)
+
+def ensure_locations_loaded():
+    """Ensure locations are loaded into memory from file if available"""
+    global SHARED_LOCATIONS
+    if not SHARED_LOCATIONS:
+        locations_file = DATA_DIR / "sapo_locations.json.gz"
+        if locations_file.exists():
+            SHARED_LOCATIONS = load_compressed(locations_file)
+            if SHARED_LOCATIONS:
+                GENERATION_STATUS["locations"]["generated"] = True
+                GENERATION_STATUS["locations"]["count"] = len(SHARED_LOCATIONS)
+
+def ensure_shops_loaded():
+    """Ensure shops are loaded into memory from file if available"""
+    global SHARED_SHOPS
+    if not SHARED_SHOPS:
+        shops_file = DATA_DIR / "odoo_shops.json.gz"
+        if shops_file.exists():
+            SHARED_SHOPS = load_compressed(shops_file)
+            if SHARED_SHOPS:
+                GENERATION_STATUS["shops"]["generated"] = True
+                GENERATION_STATUS["shops"]["count"] = len(SHARED_SHOPS)
+
+def generate_shared_products(count=1000, mode="replace"):
+    """
+    Generate shared product catalog for all data sources
+
+    Args:
+        count: Number of products to generate
+        mode: "replace" (default) - replace all data, "append" - add to existing data
+    """
+    global SHARED_PRODUCTS
+
+    # Load existing data if mode is append
+    start_id = 1
+    if mode == "append":
+        # Ensure existing data is loaded
+        ensure_products_loaded()
+        if SHARED_PRODUCTS:
+            start_id = max(p["id"] for p in SHARED_PRODUCTS) + 1
+            print(f"📦 Appending {count} products starting from ID {start_id}")
+        else:
+            print(f"📦 No existing products found, starting from ID 1")
 
     products = []
     for i in range(count):
+        product_id = start_id + i
         category = random.choice(list(TECH_CATEGORIES.keys()))
         category_info = TECH_CATEGORIES[category]
         brand = random.choice(category_info["brands"])
@@ -129,7 +192,7 @@ def generate_shared_products(count=1000):
         sale_price_usd = round(sale_price_vnd / 24_000, 2)
 
         product = {
-            "id": i + 1,
+            "id": product_id,
             "name": generate_product_name(category, brand, model),
             "name_en": f"{brand} {model}",
             "sku": fake_en.bothify("TECH-####-???").upper(),
@@ -152,16 +215,22 @@ def generate_shared_products(count=1000):
         }
         products.append(product)
 
-    SHARED_PRODUCTS = products
+    # Combine with existing data if append mode
+    if mode == "append" and SHARED_PRODUCTS:
+        all_products = SHARED_PRODUCTS + products
+    else:
+        all_products = products
+
+    SHARED_PRODUCTS = all_products
 
     # Save to file
-    save_compressed(products, DATA_DIR / "products.json.gz")
+    save_compressed(all_products, DATA_DIR / "products.json.gz")
 
     # Update status
     GENERATION_STATUS["products"]["generated"] = True
-    GENERATION_STATUS["products"]["count"] = len(products)
+    GENERATION_STATUS["products"]["count"] = len(all_products)
 
-    return products
+    return all_products
 
 def generate_vietnamese_name():
     """Generate realistic Vietnamese name"""
@@ -248,9 +317,25 @@ def generate_shared_customers(count=2_000_000, batch_size=10_000):
     print(f"✅ Generated {count:,} customers")
     return count
 
-def generate_shared_staff(count=300):
-    """Generate staff members for stores"""
+def generate_shared_staff(count=300, mode="replace"):
+    """
+    Generate staff members for stores
+
+    Args:
+        count: Number of staff to generate
+        mode: "replace" (default) - replace all data, "append" - add to existing data
+    """
     global SHARED_STAFF
+
+    # Load existing data if mode is append
+    start_id = 1
+    if mode == "append":
+        ensure_staff_loaded()
+        if SHARED_STAFF:
+            start_id = max(s["id"] for s in SHARED_STAFF) + 1
+            print(f"👥 Appending {count} staff starting from ID {start_id}")
+        else:
+            print(f"👥 No existing staff found, starting from ID 1")
 
     positions = [
         "Nhân viên bán hàng", "Nhân viên tư vấn", "Thu ngân",
@@ -260,13 +345,14 @@ def generate_shared_staff(count=300):
 
     staff = []
     for i in range(count):
+        staff_id = start_id + i
         full_name = generate_vietnamese_name()
 
         staff_member = {
-            "id": i + 1,
-            "code": f"NV{str(i+1).zfill(4)}",
+            "id": staff_id,
+            "code": f"NV{str(staff_id).zfill(4)}",
             "full_name": full_name,
-            "email": f"nhanvien{i+1}@techstore.vn",
+            "email": f"nhanvien{staff_id}@techstore.vn",
             "phone": fake_vi.phone_number(),
             "position": random.choice(positions),
             "hire_date": (datetime.now() - timedelta(days=random.randint(30, 1095))).isoformat(),
@@ -274,20 +360,42 @@ def generate_shared_staff(count=300):
         }
         staff.append(staff_member)
 
-    SHARED_STAFF = staff
+    # Combine with existing data if append mode
+    if mode == "append" and SHARED_STAFF:
+        all_staff = SHARED_STAFF + staff
+    else:
+        all_staff = staff
+
+    SHARED_STAFF = all_staff
 
     # Save to file
-    save_compressed(staff, DATA_DIR / "staff.json.gz")
+    save_compressed(all_staff, DATA_DIR / "staff.json.gz")
 
     # Update status
     GENERATION_STATUS["staff"]["generated"] = True
-    GENERATION_STATUS["staff"]["count"] = len(staff)
+    GENERATION_STATUS["staff"]["count"] = len(all_staff)
 
-    return staff
+    return all_staff
 
-def generate_shared_locations(count=50):
-    """Generate Vietnam store locations"""
+def generate_shared_locations(count=50, mode="replace"):
+    """
+    Generate Vietnam store locations
+
+    Args:
+        count: Number of locations to generate
+        mode: "replace" (default) - replace all data, "append" - add to existing data
+    """
     global SHARED_LOCATIONS
+
+    # Load existing data if mode is append
+    start_id = 1
+    if mode == "append":
+        ensure_locations_loaded()
+        if SHARED_LOCATIONS:
+            start_id = max(loc["id"] for loc in SHARED_LOCATIONS) + 1
+            print(f"🏪 Appending {count} locations starting from ID {start_id}")
+        else:
+            print(f"🏪 No existing locations found, starting from ID 1")
 
     cities = [
         "Hà Nội", "Hà Nội", "Hà Nội", "Hà Nội", "Hà Nội",
@@ -309,7 +417,9 @@ def generate_shared_locations(count=50):
 
     locations = []
     for i in range(count):
-        city = cities[i]
+        location_id = start_id + i
+        # Cycle through cities if count > len(cities)
+        city = cities[i % len(cities)]
 
         if city == "Hà Nội":
             district = random.choice(districts_hanoi)
@@ -319,16 +429,16 @@ def generate_shared_locations(count=50):
             district = "Trung tâm"
 
         location = {
-            "id": i + 1,
+            "id": location_id,
             "tenant_id": random.randint(1000, 9999),
             "name": f"TechStore {city} - {district}",
-            "code": f"CN{str(i+1).zfill(3)}",
+            "code": f"CN{str(location_id).zfill(3)}",
             "address": fake_vi.street_address(),
             "district": district,
             "city": city,
             "country": "Vietnam",
             "phone": fake_vi.phone_number(),
-            "email": f"chinhanh{i+1}@techstore.vn",
+            "email": f"chinhanh{location_id}@techstore.vn",
             "status": "active",
             "created_on": (datetime.now() - timedelta(days=random.randint(180, 1095))).isoformat(),
             "modified_on": datetime.now().isoformat(),
@@ -337,20 +447,42 @@ def generate_shared_locations(count=50):
         }
         locations.append(location)
 
-    SHARED_LOCATIONS = locations
+    # Combine with existing data if append mode
+    if mode == "append" and SHARED_LOCATIONS:
+        all_locations = SHARED_LOCATIONS + locations
+    else:
+        all_locations = locations
+
+    SHARED_LOCATIONS = all_locations
 
     # Save to file
-    save_compressed(locations, DATA_DIR / "sapo_locations.json.gz")
+    save_compressed(all_locations, DATA_DIR / "sapo_locations.json.gz")
 
     # Update status
     GENERATION_STATUS["locations"]["generated"] = True
-    GENERATION_STATUS["locations"]["count"] = len(locations)
+    GENERATION_STATUS["locations"]["count"] = len(all_locations)
 
-    return locations
+    return all_locations
 
-def generate_shared_shops(count=30):
-    """Generate international POS shop configurations"""
+def generate_shared_shops(count=30, mode="replace"):
+    """
+    Generate international POS shop configurations
+
+    Args:
+        count: Number of shops to generate
+        mode: "replace" (default) - replace all data, "append" - add to existing data
+    """
     global SHARED_SHOPS
+
+    # Load existing data if mode is append
+    start_id = 1
+    if mode == "append":
+        ensure_shops_loaded()
+        if SHARED_SHOPS:
+            start_id = max(shop["id"] for shop in SHARED_SHOPS) + 1
+            print(f"🛍️  Appending {count} shops starting from ID {start_id}")
+        else:
+            print(f"🛍️  No existing shops found, starting from ID 1")
 
     cities = [
         ("Singapore", "SGD", "Singapore"),
@@ -386,19 +518,23 @@ def generate_shared_shops(count=30):
     ]
 
     shops = []
-    for i, (city, currency, country) in enumerate(cities):
+    for i in range(count):
+        shop_id = start_id + i
+        # Cycle through cities if count > len(cities)
+        city, currency, country = cities[i % len(cities)]
+
         shop = {
-            "id": i + 1,
+            "id": shop_id,
             "name": f"TechStore {city} - {fake_en.street_name()}",
             "company_id": random.randint(1, 5),
             "company_name": "TechStore International Ltd.",
-            "pricelist_id": i + 1,
-            "currency_id": i + 1,
+            "pricelist_id": shop_id,
+            "currency_id": shop_id,
             "currency_code": currency,
-            "warehouse_id": i + 1,
+            "warehouse_id": shop_id,
             "warehouse_name": f"Warehouse {city}",
-            "picking_type_id": i + 100,
-            "journal_id": i + 200,
+            "picking_type_id": shop_id + 100,
+            "journal_id": shop_id + 200,
             "city": city,
             "country": country,
             "module_pos_discount": True,
@@ -407,16 +543,22 @@ def generate_shared_shops(count=30):
         }
         shops.append(shop)
 
-    SHARED_SHOPS = shops
+    # Combine with existing data if append mode
+    if mode == "append" and SHARED_SHOPS:
+        all_shops = SHARED_SHOPS + shops
+    else:
+        all_shops = shops
+
+    SHARED_SHOPS = all_shops
 
     # Save to file
-    save_compressed(shops, DATA_DIR / "odoo_shops.json.gz")
+    save_compressed(all_shops, DATA_DIR / "odoo_shops.json.gz")
 
     # Update status
     GENERATION_STATUS["shops"]["generated"] = True
-    GENERATION_STATUS["shops"]["count"] = len(shops)
+    GENERATION_STATUS["shops"]["count"] = len(all_shops)
 
-    return shops
+    return all_shops
 
 def generate_transaction_id():
     """Generate unique transaction ID across all systems"""
@@ -426,6 +568,7 @@ def generate_transaction_id():
 
 def get_random_product():
     """Get random product from shared catalog"""
+    ensure_products_loaded()
     return random.choice(SHARED_PRODUCTS) if SHARED_PRODUCTS else None
 
 def get_random_customer():
@@ -435,14 +578,17 @@ def get_random_customer():
 
 def get_random_staff():
     """Get random staff member"""
+    ensure_staff_loaded()
     return random.choice(SHARED_STAFF) if SHARED_STAFF else None
 
 def get_random_location():
     """Get random location"""
+    ensure_locations_loaded()
     return random.choice(SHARED_LOCATIONS) if SHARED_LOCATIONS else None
 
 def get_random_shop():
     """Get random shop"""
+    ensure_shops_loaded()
     return random.choice(SHARED_SHOPS) if SHARED_SHOPS else None
 
 async def initialize_shared_data():

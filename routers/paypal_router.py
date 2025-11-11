@@ -13,7 +13,8 @@ import gzip
 import json
 from shared.data_generator import (
     SHARED_PRODUCTS, get_random_customer, generate_transaction_id,
-    DATA_DIR, fake_vi, fake_en, GENERATION_STATUS
+    DATA_DIR, fake_vi, fake_en, GENERATION_STATUS,
+    ensure_products_loaded
 )
 
 router = APIRouter()
@@ -121,21 +122,39 @@ def generate_transactions_batch(count):
 
     return transactions
 
-def generate_all_transactions(count=300):
-    """Generate all PayPal transactions"""
-    print(f"💳 Starting PayPal transaction generation: {count:,} transactions")
+def generate_all_transactions(count=300, mode="replace"):
+    """
+    Generate PayPal transactions
 
-    transactions = generate_transactions_batch(count)
+    Args:
+        count: Number of transactions to generate
+        mode: "replace" (default) - replace all data, "append" - add to existing data
+    """
+    print(f"💳 Starting PayPal transaction generation: {count:,} transactions (mode: {mode})")
+
+    new_transactions = generate_transactions_batch(count)
 
     batch_file = TRANSACTIONS_DIR / "transactions.json.gz"
-    save_compressed(transactions, batch_file)
 
-    generation_status["transactions"]["generated"] = count
-    generation_status["transactions"]["target"] = count
+    # Load existing transactions if append mode
+    if mode == "append":
+        existing = load_compressed(batch_file)
+        if existing:
+            all_transactions = existing + new_transactions
+            print(f"Appending {count} new transactions to {len(existing)} existing")
+        else:
+            all_transactions = new_transactions
+    else:
+        all_transactions = new_transactions
+
+    save_compressed(all_transactions, batch_file)
+
+    generation_status["transactions"]["generated"] = len(all_transactions)
+    generation_status["transactions"]["target"] = len(all_transactions)
     generation_status["transactions"]["completed"] = True
-    print(f"✅ PayPal transaction generation completed!")
+    print(f"✅ PayPal transaction generation completed! Total: {len(all_transactions)}")
 
-    return transactions
+    return all_transactions
 
 # API Endpoints
 @router.get("/", response_model=StandardResponse)
@@ -165,13 +184,14 @@ async def get_transactions(
     limit: int = Query(50, ge=1, le=500)
 ):
     """Get PayPal transactions with filters"""
+    # Try to load transactions from file
     batch_file = TRANSACTIONS_DIR / "transactions.json.gz"
     transactions = load_compressed(batch_file)
 
     if not transactions:
         return {
-            "status": "warning",
-            "msg": "Transactions not generated yet. Please generate transactions first.",
+            "status": "error",
+            "msg": "No transactions data found. Please generate transactions first via /paypal/generate/transactions",
             "data": [],
             "count": 0
         }
@@ -201,13 +221,14 @@ async def get_payments(
     count: int = Query(50, ge=1, le=100)
 ):
     """Get payment records"""
+    # Try to load transactions from file
     batch_file = TRANSACTIONS_DIR / "transactions.json.gz"
     transactions = load_compressed(batch_file)
 
     if not transactions:
         return {
-            "status": "warning",
-            "msg": "Payments not generated yet. Please generate transactions first.",
+            "status": "error",
+            "msg": "No payments data found. Please generate transactions first via /paypal/generate/transactions",
             "data": [],
             "count": 0
         }
@@ -267,16 +288,29 @@ async def get_balances():
 @router.get("/generate/transactions", response_model=StandardResponse)
 async def generate_transactions_endpoint(
     background_tasks: BackgroundTasks,
-    count: int = Query(300, ge=10, le=1000, description="Number of transactions to generate")
+    count: int = Query(300, ge=10, le=1000, description="Number of transactions to generate"),
+    method: Optional[str] = Query(None, description="Generation method: 'new' to append new data, 'no' or None to keep existing data")
 ):
-    """Generate PayPal transactions"""
+    """Generate PayPal transactions
+
+    Parameters:
+    - method='new': Generate and append new transactions to existing data
+    - method='no' or None: Keep existing data without generating new
+    """
     try:
-        if generation_status["transactions"]["completed"]:
+        # Check if data already exists and method is not 'new'
+        batch_file = TRANSACTIONS_DIR / "transactions.json.gz"
+        existing = load_compressed(batch_file)
+
+        if existing and method != "new":
             return {
                 "status": "warning",
-                "msg": "Transactions already generated. Delete existing data to regenerate.",
-                "data": {"count": generation_status["transactions"]["generated"]},
-                "count": generation_status["transactions"]["generated"]
+                "msg": "Transactions already exist. Use 'method=new' parameter to generate and append new data.",
+                "data": {
+                    "count": len(existing),
+                    "hint": "Add parameter: method=new to append more transactions"
+                },
+                "count": len(existing)
             }
 
         if generation_status["is_generating"]:
@@ -289,17 +323,22 @@ async def generate_transactions_endpoint(
         def generate():
             generation_status["is_generating"] = True
             try:
-                generate_all_transactions(count)
+                if method == "new":
+                    generate_all_transactions(count, mode="append")
+                else:
+                    generate_all_transactions(count, mode="replace")
             finally:
                 generation_status["is_generating"] = False
 
         background_tasks.add_task(generate)
 
+        mode_msg = "appending" if method == "new" else "generating"
         return {
             "status": "success",
-            "msg": f"PayPal transaction generation started for {count} transactions",
+            "msg": f"PayPal transaction generation started ({mode_msg} {count} transactions)",
             "data": {
                 "target": count,
+                "mode": "append" if method == "new" else "replace",
                 "estimated_time": "< 1 minute"
             }
         }
