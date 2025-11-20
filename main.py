@@ -58,7 +58,8 @@ app = FastAPI(
     },
     license_info={
         "name": "MIT License"
-    }
+    },
+    redoc_url="/redoc"
 )
 
 # CORS middleware

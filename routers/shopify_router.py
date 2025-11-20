@@ -138,7 +138,7 @@ def generate_orders_in_batches():
 
     for batch_num in range(0, TARGET_ORDERS, ORDER_BATCH_SIZE):
         batch_size = min(ORDER_BATCH_SIZE, TARGET_ORDERS - batch_num)
-        orders = data_generator.generate_order_batch(batch_num + 1, batch_size)
+        orders = generate_order_batch(batch_num + 1, batch_size)
 
         batch_file = ORDERS_DIR / f"orders_batch_{batch_num // ORDER_BATCH_SIZE}.json.gz"
         save_compressed(orders, batch_file)
