@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 import json
 import gzip
+import asyncio
 
 # Initialize Faker with Vietnamese locale
 fake_vi = Faker('vi_VN')
@@ -81,6 +82,8 @@ TECH_CATEGORIES = {
     }
 }
 
+_lock = asyncio.Lock()
+
 def save_compressed(data, filepath):
     """Save data as compressed JSON"""
     with gzip.open(filepath, 'wt', encoding='utf-8') as f:
@@ -108,16 +111,22 @@ def generate_product_name(category, brand, model):
     return names.get(category, f"{brand} {model}")
 
 # Helper functions to ensure data is loaded
-def ensure_products_loaded():
+async def ensure_products_loaded():
     """Ensure products are loaded into memory from file if available"""
-    global SHARED_PRODUCTS
-    if not SHARED_PRODUCTS:
-        products_file = DATA_DIR / "products.json.gz"
-        if products_file.exists():
-            SHARED_PRODUCTS = load_compressed(products_file)
-            if SHARED_PRODUCTS:
-                GENERATION_STATUS["products"]["generated"] = True
-                GENERATION_STATUS["products"]["count"] = len(SHARED_PRODUCTS)
+    async with _lock:
+        global SHARED_PRODUCTS
+
+        print("Shared Product in sub function: ", len(SHARED_PRODUCTS))
+        if not SHARED_PRODUCTS or len(SHARED_PRODUCTS) == 0:
+            products_file = DATA_DIR / "products.json.gz"
+            print("Product file path: ", products_file)
+            if products_file.exists():
+                SHARED_PRODUCTS = load_compressed(products_file)
+                print("Shared Product in function: len with: ", len(SHARED_PRODUCTS))
+        else:
+            GENERATION_STATUS["products"]["generated"] = True
+            GENERATION_STATUS["products"]["count"] = len(SHARED_PRODUCTS)
+
 
 def ensure_staff_loaded():
     """Ensure staff are loaded into memory from file if available"""

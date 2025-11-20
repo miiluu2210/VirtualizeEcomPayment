@@ -11,7 +11,7 @@ import uvicorn
 
 app = FastAPI(
     title="TechStore Vietnam - Unified API Simulator",
-    version="3.0.0",
+    version="1.0.0",
     description="""
     # 🛒 TechStore Vietnam - Multi-Source Data Simulator
 

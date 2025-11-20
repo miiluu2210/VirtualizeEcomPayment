@@ -11,18 +11,20 @@ import random
 from pathlib import Path
 import gzip
 import json
-from shared.data_generator import (
-    SHARED_PRODUCTS, SHARED_STAFF, SHARED_CUSTOMERS,
-    get_random_product, get_random_customer, get_random_staff,
-    generate_transaction_id, generate_shared_products, generate_shared_customers,
-    generate_shared_staff, DATA_DIR, GENERATION_STATUS,
-    ensure_products_loaded, ensure_staff_loaded
-)
+import shared.data_generator as data_generator
+# from shared.data_generator import (
+#     SHARED_PRODUCTS, SHARED_STAFF, SHARED_CUSTOMERS,
+#     get_random_product, get_random_customer, get_random_staff,
+#     generate_transaction_id, generate_shared_products, generate_shared_customers,
+#     generate_shared_staff, DATA_DIR, GENERATION_STATUS,
+#     ensure_products_loaded, ensure_staff_loaded
+# )
+#import shared.state as state
 
 router = APIRouter()
 
 # Configuration
-ORDERS_DIR = DATA_DIR / "shopify_orders"
+ORDERS_DIR = data_generator.DATA_DIR / "shopify_orders"
 ORDERS_DIR.mkdir(exist_ok=True)
 
 TARGET_ORDERS = 6_000_000
@@ -59,17 +61,17 @@ def generate_order_batch(start_id, batch_size):
     payment_statuses = ["paid", "pending", "partially_paid", "refunded"]
 
     for i in range(start_id, start_id + batch_size):
-        customer = get_random_customer()
+        customer = data_generator.get_random_customer()
         is_vietnamese = random.random() < 0.95
 
         num_items = random.randint(1, 5)
         line_items = []
         subtotal_vnd = 0
         subtotal_usd = 0
-        transaction_id = generate_transaction_id()
+        transaction_id = data_generator.generate_transaction_id()
 
         for j in range(num_items):
-            product = get_random_product()
+            product = data_generator.get_random_product()
             if not product:
                 continue
 
@@ -136,7 +138,7 @@ def generate_orders_in_batches():
 
     for batch_num in range(0, TARGET_ORDERS, ORDER_BATCH_SIZE):
         batch_size = min(ORDER_BATCH_SIZE, TARGET_ORDERS - batch_num)
-        orders = generate_order_batch(batch_num + 1, batch_size)
+        orders = data_generator.generate_order_batch(batch_num + 1, batch_size)
 
         batch_file = ORDERS_DIR / f"orders_batch_{batch_num // ORDER_BATCH_SIZE}.json.gz"
         save_compressed(orders, batch_file)
@@ -162,8 +164,8 @@ async def shopify_info():
             "service": "Shopify E-commerce API",
             "market": "Vietnam Technology Retail - Online Store",
             "orders": f"{generation_status['orders']['generated']:,} / {TARGET_ORDERS:,}",
-            "products": len(SHARED_PRODUCTS),
-            "staff": len(SHARED_STAFF),
+            "products": len(data_generator.SHARED_PRODUCTS),
+            "staff": len(data_generator.SHARED_STAFF),
             "endpoints": [
                 "/shopify/admin/api/2024-01/products",
                 "/shopify/admin/api/2024-01/orders",
@@ -180,9 +182,9 @@ async def get_products(
 ):
     """Get products with Vietnamese tech focus"""
     # Try to load products from file if not in memory
-    ensure_products_loaded()
-
-    if not SHARED_PRODUCTS:
+    await data_generator.ensure_products_loaded()
+    print("Shared Product in function get products: ", len(data_generator.SHARED_PRODUCTS))
+    if not data_generator.SHARED_PRODUCTS:
         return {
             "status": "error",
             "msg": "No products data found. Please generate products first via /shopify/generate/products",
@@ -190,13 +192,13 @@ async def get_products(
             "count": 0
         }
 
-    products = SHARED_PRODUCTS[offset:offset + limit]
+    products = data_generator.SHARED_PRODUCTS[offset:offset + limit]
     return {
         "status": "success",
         "msg": "Products retrieved successfully",
         "data": products,
         "count": len(products),
-        "total": len(SHARED_PRODUCTS)
+        "total": len(data_generator.SHARED_PRODUCTS)
     }
 
 @router.get("/admin/api/2024-01/orders", response_model=StandardResponse)
@@ -248,9 +250,9 @@ async def get_orders(
 async def get_staff():
     """Get all staff members"""
     # Try to load staff from file if not in memory
-    ensure_staff_loaded()
+    data_generator.ensure_staff_loaded()
 
-    if not SHARED_STAFF:
+    if not data_generator.SHARED_STAFF:
         return {
             "status": "error",
             "msg": "No staff data found. Please generate staff first via /shopify/generate/staff",
@@ -261,9 +263,9 @@ async def get_staff():
     return {
         "status": "success",
         "msg": "Staff retrieved successfully",
-        "data": SHARED_STAFF,
-        "count": len(SHARED_STAFF),
-        "total": len(SHARED_STAFF)
+        "data": data_generator.SHARED_STAFF,
+        "count": len(data_generator.SHARED_STAFF),
+        "total": len(data_generator.SHARED_STAFF)
     }
 
 # Generation Sub-Endpoints
@@ -281,33 +283,32 @@ async def generate_products_endpoint(
     """
     try:
         # Ensure existing data is loaded
-        ensure_products_loaded()
+        data_generator.ensure_products_loaded()
 
         # Check if data already exists and method is not 'new'
-        if GENERATION_STATUS["products"]["generated"] and method != "new":
+        if data_generator.GENERATION_STATUS["products"]["generated"] and method != "new":
             return {
                 "status": "warning",
                 "msg": "Products already exist. Use 'method=new' parameter to generate and append new data.",
                 "data": {
-                    "count": len(SHARED_PRODUCTS),
+                    "count": len(data_generator.SHARED_PRODUCTS),
                     "hint": "Add parameter: method=new to append more products"
                 },
-                "count": len(SHARED_PRODUCTS)
+                "count": len(data_generator.SHARED_PRODUCTS)
             }
 
         # Generate new products with appropriate mode
         if method == "new":
             # Append mode
-            products = generate_shared_products(count, mode="append")
+            products = data_generator.generate_shared_products(count, mode="append")
             msg = f"Successfully appended {count} new products. Total: {len(products)}"
         else:
             # Replace mode (first time generation)
-            products = generate_shared_products(count, mode="replace")
+            products = data_generator.generate_shared_products(count, mode="replace")
             msg = f"Successfully generated {len(products)} products"
 
         # Update the module-level SHARED_PRODUCTS
-        import shared.data_generator as dg
-        dg.SHARED_PRODUCTS = products
+        data_generator.SHARED_PRODUCTS = products
 
         return {
             "status": "success",
@@ -345,25 +346,25 @@ async def generate_customers_endpoint(
     """
     try:
         # Check if data already exists and method is not 'new'
-        if GENERATION_STATUS["customers"]["generated"] and method != "new":
+        if data_generator.GENERATION_STATUS["customers"]["generated"] and method != "new":
             return {
                 "status": "warning",
                 "msg": "Customers already exist. Use 'method=new' parameter to regenerate all customer data.",
                 "data": {
-                    "count": GENERATION_STATUS["customers"]["count"],
+                    "count": data_generator.GENERATION_STATUS["customers"]["count"],
                     "hint": "Add parameter: method=new to regenerate (warning: will replace all existing customers)"
                 },
-                "count": GENERATION_STATUS["customers"]["count"]
+                "count": data_generator.GENERATION_STATUS["customers"]["count"]
             }
 
         # Clear existing data if method='new'
-        if method == "new" and GENERATION_STATUS["customers"]["generated"]:
+        if method == "new" and data_generator.GENERATION_STATUS["customers"]["generated"]:
             print("🗑️  Clearing existing customers...")
             from shared.data_generator import clear_generated_data
             clear_generated_data("customers")
 
         def generate():
-            generate_shared_customers(count)
+            data_generator.generate_shared_customers(count)
 
         background_tasks.add_task(generate)
 
@@ -397,33 +398,31 @@ async def generate_staff_endpoint(
     """
     try:
         # Ensure existing data is loaded
-        ensure_staff_loaded()
+        data_generator.ensure_staff_loaded()
 
         # Check if data already exists and method is not 'new'
-        if GENERATION_STATUS["staff"]["generated"] and method != "new":
+        if data_generator.GENERATION_STATUS["staff"]["generated"] and method != "new":
             return {
                 "status": "warning",
                 "msg": "Staff already exist. Use 'method=new' parameter to generate and append new data.",
                 "data": {
-                    "count": len(SHARED_STAFF),
+                    "count": len(data_generator.SHARED_STAFF),
                     "hint": "Add parameter: method=new to append more staff"
                 },
-                "count": len(SHARED_STAFF)
+                "count": len(data_generator.SHARED_STAFF)
             }
 
         # Generate new staff with appropriate mode
         if method == "new":
             # Append mode
-            staff = generate_shared_staff(count, mode="append")
+            staff = data_generator.generate_shared_staff(count, mode="append")
             msg = f"Successfully appended {count} new staff members. Total: {len(staff)}"
         else:
             # Replace mode (first time generation)
-            staff = generate_shared_staff(count, mode="replace")
+            staff = data_generator.generate_shared_staff(count, mode="replace")
             msg = f"Successfully generated {len(staff)} staff members"
 
-        # Update the module-level SHARED_STAFF
-        import shared.data_generator as dg
-        dg.SHARED_STAFF = staff
+        data_generator.SHARED_STAFF = staff
 
         return {
             "status": "success",
@@ -448,7 +447,7 @@ async def generate_staff_endpoint(
 async def generate_orders_endpoint(background_tasks: BackgroundTasks):
     """Generate Shopify orders in background"""
     try:
-        if not SHARED_PRODUCTS:
+        if not data_generator.SHARED_PRODUCTS:
             return {
                 "status": "error",
                 "msg": "Products must be generated first before orders",
@@ -502,9 +501,9 @@ async def get_generation_status():
         "status": "success",
         "msg": "Generation status retrieved",
         "data": {
-            "products": GENERATION_STATUS["products"],
-            "customers": GENERATION_STATUS["customers"],
-            "staff": GENERATION_STATUS["staff"],
+            "products": data_generator.GENERATION_STATUS["products"],
+            "customers": data_generator.GENERATION_STATUS["customers"],
+            "staff": data_generator.GENERATION_STATUS["staff"],
             "orders": generation_status["orders"],
             "is_generating": generation_status["is_generating"]
         }
@@ -517,17 +516,17 @@ async def generate_all_data(background_tasks: BackgroundTasks):
     try:
         def generate_all():
             # Generate in sequence
-            if not GENERATION_STATUS["products"]["generated"]:
+            if not data_generator.GENERATION_STATUS["products"]["generated"]:
                 print("Generating products...")
-                generate_shared_products(1000)
+                data_generator.generate_shared_products(1000)
 
-            if not GENERATION_STATUS["staff"]["generated"]:
+            if not data_generator.GENERATION_STATUS["staff"]["generated"]:
                 print("Generating staff...")
-                generate_shared_staff(300)
+                data_generator.generate_shared_staff(300)
 
-            if not GENERATION_STATUS["customers"]["generated"]:
+            if not data_generator.GENERATION_STATUS["customers"]["generated"]:
                 print("Generating customers...")
-                generate_shared_customers(2_000_000)
+                data_generator.generate_shared_customers(2_000_000)
 
             if not generation_status["orders"]["completed"]:
                 print("Generating orders...")
