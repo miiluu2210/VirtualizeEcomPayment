@@ -122,7 +122,7 @@ def generate_transactions_batch(count):
 
     return transactions
 
-def generate_all_transactions(count=300, mode="replace"):
+def generate_all_transactions(count=1000000, mode="replace"):
     """
     Generate PayPal transactions
 

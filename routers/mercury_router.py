@@ -47,7 +47,7 @@ def load_compressed(filepath):
     with gzip.open(filepath, 'rt', encoding='utf-8') as f:
         return json.load(f)
 
-def generate_accounts(count=3):
+def generate_accounts(count=10):
     """Generate Mercury bank accounts"""
     global ACCOUNTS
     accounts = []
@@ -177,7 +177,7 @@ def generate_transactions_batch(count, accounts):
 
     return transactions
 
-def generate_all_transactions(count=500):
+def generate_all_transactions(count=1000000):
     """Generate all Mercury transactions"""
     print(f"🏦 Starting Mercury Bank transaction generation: {count:,} transactions")
 
