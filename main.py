@@ -72,14 +72,26 @@ app.add_middleware(
 )
 
 # Import routers after app is defined to avoid circular imports
-from routers import shopify_router, paypal_router, mercury_router, sapo_router, odoo_router
+from routers import (
+    shopify_router, paypal_router, mercury_router, sapo_router, odoo_router,
+    momo_router, zalopay_router, lookup_router, cart_tracking_router, online_orders_router
+)
 
-# Include routers
+# Include routers - E-commerce
 app.include_router(shopify_router.router, prefix="/shopify", tags=["Shopify E-commerce"])
-app.include_router(paypal_router.router, prefix="/paypal", tags=["PayPal Payments"])
-app.include_router(mercury_router.router, prefix="/mercury", tags=["Mercury Banking"])
 app.include_router(sapo_router.router, prefix="/sapo", tags=["Sapo POS Vietnam"])
 app.include_router(odoo_router.router, prefix="/odoo", tags=["Odoo POS International"])
+
+# Include routers - Payment Gateways
+app.include_router(paypal_router.router, prefix="/paypal", tags=["PayPal Payments"])
+app.include_router(mercury_router.router, prefix="/mercury", tags=["Mercury Banking"])
+app.include_router(momo_router.router, prefix="/momo", tags=["MoMo E-wallet"])
+app.include_router(zalopay_router.router, prefix="/zalopay", tags=["ZaloPay E-wallet"])
+
+# Include routers - Lookup & Tracking
+app.include_router(lookup_router.router, prefix="/lookup", tags=["Lookup API"])
+app.include_router(cart_tracking_router.router, prefix="/cart", tags=["Cart Tracking"])
+app.include_router(online_orders_router.router, prefix="/online", tags=["Online Orders"])
 
 
 @app.on_event("startup")
@@ -105,22 +117,38 @@ async def root():
         "msg": "TechStore Vietnam - Unified API Simulator",
         "data": {
             "service": "TechStore Vietnam - Unified API Simulator",
-            "version": "3.0.0",
+            "version": "4.0.0",
             "market": "Vietnam Technology Retail",
             "documentation": "/docs",
             "data_sources": {
-                "shopify": "/shopify/",
-                "paypal": "/paypal/",
-                "mercury": "/mercury/",
-                "sapo": "/sapo/",
-                "odoo": "/odoo/"
+                "e_commerce": {
+                    "shopify": "/shopify/",
+                    "sapo": "/sapo/",
+                    "odoo": "/odoo/"
+                },
+                "payment_gateways": {
+                    "paypal": "/paypal/",
+                    "mercury": "/mercury/",
+                    "momo": "/momo/",
+                    "zalopay": "/zalopay/"
+                },
+                "tracking": {
+                    "lookup": "/lookup/",
+                    "cart": "/cart/",
+                    "online_orders": "/online/"
+                }
             },
             "endpoints": {
                 "shopify": "/shopify/admin/api/2024-01/",
                 "paypal": "/paypal/v1/",
                 "mercury": "/mercury/api/v1/",
                 "sapo": "/sapo/admin/",
-                "odoo": "/odoo/api/"
+                "odoo": "/odoo/api/",
+                "momo": "/momo/v2/",
+                "zalopay": "/zalopay/v2/",
+                "lookup": "/lookup/",
+                "cart": "/cart/",
+                "online": "/online/"
             }
         }
     }

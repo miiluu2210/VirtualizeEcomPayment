@@ -2,6 +2,10 @@
 Shared Data Generator
 Generates consistent product catalog, customers, and metadata
 Used across all data source simulators
+
+Updated structure:
+- shared_data/share_data/ - Shared data across all routers (products, staff, customers, locations, shops)
+- shared_data/private_data/{router_name}/ - Private data for each router
 """
 
 from faker import Faker
@@ -25,9 +29,32 @@ SHARED_LOCATIONS = []
 SHARED_SHOPS = []
 TRANSACTION_ID_COUNTER = 1000000
 
-# Data directory
+# Data directories - New structure
 DATA_DIR = Path("./shared_data")
+SHARE_DATA_DIR = DATA_DIR / "share_data"
+PRIVATE_DATA_DIR = DATA_DIR / "private_data"
+
+# Create directories
 DATA_DIR.mkdir(exist_ok=True)
+SHARE_DATA_DIR.mkdir(exist_ok=True)
+PRIVATE_DATA_DIR.mkdir(exist_ok=True)
+
+# Private data directories for each router
+PRIVATE_DIRS = {
+    "shopify": PRIVATE_DATA_DIR / "shopify",
+    "sapo": PRIVATE_DATA_DIR / "sapo",
+    "odoo": PRIVATE_DATA_DIR / "odoo",
+    "paypal": PRIVATE_DATA_DIR / "paypal",
+    "mercury": PRIVATE_DATA_DIR / "mercury",
+    "momo": PRIVATE_DATA_DIR / "momo",
+    "zalopay": PRIVATE_DATA_DIR / "zalopay",
+    "cart_tracking": PRIVATE_DATA_DIR / "cart_tracking",
+    "online_orders": PRIVATE_DATA_DIR / "online_orders"
+}
+
+# Create all private directories
+for dir_path in PRIVATE_DIRS.values():
+    dir_path.mkdir(exist_ok=True)
 
 # Lock files to track generation status
 GENERATION_STATUS = {
@@ -96,6 +123,16 @@ def load_compressed(filepath):
     with gzip.open(filepath, 'rt', encoding='utf-8') as f:
         return json.load(f)
 
+def get_share_data_path(filename):
+    """Get path for shared data file"""
+    return SHARE_DATA_DIR / filename
+
+def get_private_data_path(router_name, filename):
+    """Get path for private data file"""
+    if router_name in PRIVATE_DIRS:
+        return PRIVATE_DIRS[router_name] / filename
+    return PRIVATE_DATA_DIR / router_name / filename
+
 def generate_product_name(category, brand, model):
     """Generate realistic Vietnamese product name"""
     names = {
@@ -116,13 +153,15 @@ async def ensure_products_loaded():
     async with _lock:
         global SHARED_PRODUCTS
 
-        print("Shared Product in sub function: ", len(SHARED_PRODUCTS))
         if not SHARED_PRODUCTS or len(SHARED_PRODUCTS) == 0:
-            products_file = DATA_DIR / "products.json.gz"
-            print("Product file path: ", products_file)
+            # Try new location first
+            products_file = get_share_data_path("products.json.gz")
+            # Fallback to old location
+            if not products_file.exists():
+                products_file = DATA_DIR / "products.json.gz"
+
             if products_file.exists():
                 SHARED_PRODUCTS = load_compressed(products_file)
-                print("Shared Product in function: len with: ", len(SHARED_PRODUCTS))
         else:
             GENERATION_STATUS["products"]["generated"] = True
             GENERATION_STATUS["products"]["count"] = len(SHARED_PRODUCTS)
@@ -132,7 +171,12 @@ def ensure_staff_loaded():
     """Ensure staff are loaded into memory from file if available"""
     global SHARED_STAFF
     if not SHARED_STAFF:
-        staff_file = DATA_DIR / "staff.json.gz"
+        # Try new location first
+        staff_file = get_share_data_path("staff.json.gz")
+        # Fallback to old location
+        if not staff_file.exists():
+            staff_file = DATA_DIR / "staff.json.gz"
+
         if staff_file.exists():
             SHARED_STAFF = load_compressed(staff_file)
             if SHARED_STAFF:
@@ -143,7 +187,12 @@ def ensure_locations_loaded():
     """Ensure locations are loaded into memory from file if available"""
     global SHARED_LOCATIONS
     if not SHARED_LOCATIONS:
-        locations_file = DATA_DIR / "sapo_locations.json.gz"
+        # Try new location first
+        locations_file = get_share_data_path("sapo_locations.json.gz")
+        # Fallback to old location
+        if not locations_file.exists():
+            locations_file = DATA_DIR / "sapo_locations.json.gz"
+
         if locations_file.exists():
             SHARED_LOCATIONS = load_compressed(locations_file)
             if SHARED_LOCATIONS:
@@ -154,7 +203,12 @@ def ensure_shops_loaded():
     """Ensure shops are loaded into memory from file if available"""
     global SHARED_SHOPS
     if not SHARED_SHOPS:
-        shops_file = DATA_DIR / "odoo_shops.json.gz"
+        # Try new location first
+        shops_file = get_share_data_path("odoo_shops.json.gz")
+        # Fallback to old location
+        if not shops_file.exists():
+            shops_file = DATA_DIR / "odoo_shops.json.gz"
+
         if shops_file.exists():
             SHARED_SHOPS = load_compressed(shops_file)
             if SHARED_SHOPS:
@@ -164,6 +218,7 @@ def ensure_shops_loaded():
 def generate_shared_products(count=1000, mode="replace"):
     """
     Generate shared product catalog for all data sources
+    Stored in: shared_data/share_data/products.json.gz
 
     Args:
         count: Number of products to generate
@@ -178,9 +233,9 @@ def generate_shared_products(count=1000, mode="replace"):
         ensure_products_loaded()
         if SHARED_PRODUCTS:
             start_id = max(p["id"] for p in SHARED_PRODUCTS) + 1
-            print(f"📦 Appending {count} products starting from ID {start_id}")
+            print(f"Appending {count} products starting from ID {start_id}")
         else:
-            print(f"📦 No existing products found, starting from ID 1")
+            print(f"No existing products found, starting from ID 1")
 
     products = []
     for i in range(count):
@@ -232,8 +287,8 @@ def generate_shared_products(count=1000, mode="replace"):
 
     SHARED_PRODUCTS = all_products
 
-    # Save to file
-    save_compressed(all_products, DATA_DIR / "products.json.gz")
+    # Save to new location
+    save_compressed(all_products, get_share_data_path("products.json.gz"))
 
     # Update status
     GENERATION_STATUS["products"]["generated"] = True
@@ -243,10 +298,10 @@ def generate_shared_products(count=1000, mode="replace"):
 
 def generate_vietnamese_name():
     """Generate realistic Vietnamese name"""
-    last_names = ["Nguyễn", "Trần", "Lê", "Phạm", "Hoàng", "Huỳnh", "Phan", "Vũ", "Võ", "Đặng", "Bùi", "Đỗ", "Hồ", "Ngô", "Dương"]
-    middle_names = ["Văn", "Thị", "Hữu", "Đức", "Minh", "Anh", "Tuấn", "Hoàng", "Thanh", "Quốc", "Bảo", "Như"]
-    first_names_male = ["Hùng", "Dũng", "Nam", "Long", "Khang", "Phong", "Tùng", "Quân", "Thắng", "Hải", "Đạt", "Kiên"]
-    first_names_female = ["Linh", "Hương", "Mai", "Lan", "Hà", "Nga", "Trang", "Thảo", "Nhung", "Hồng", "Anh", "Chi"]
+    last_names = ["Nguyen", "Tran", "Le", "Pham", "Hoang", "Huynh", "Phan", "Vu", "Vo", "Dang", "Bui", "Do", "Ho", "Ngo", "Duong"]
+    middle_names = ["Van", "Thi", "Huu", "Duc", "Minh", "Anh", "Tuan", "Hoang", "Thanh", "Quoc", "Bao", "Nhu"]
+    first_names_male = ["Hung", "Dung", "Nam", "Long", "Khang", "Phong", "Tung", "Quan", "Thang", "Hai", "Dat", "Kien"]
+    first_names_female = ["Linh", "Huong", "Mai", "Lan", "Ha", "Nga", "Trang", "Thao", "Nhung", "Hong", "Anh", "Chi"]
 
     last = random.choice(last_names)
     middle = random.choice(middle_names)
@@ -259,11 +314,17 @@ def generate_vietnamese_name():
     return f"{last} {middle} {first}"
 
 def generate_shared_customers(count=2_000_000, batch_size=10_000):
-    """Generate shared customer base"""
+    """
+    Generate shared customer base
+    Stored in: shared_data/share_data/customers/
+    """
     print(f"Generating {count:,} shared customers...")
 
-    customer_dir = DATA_DIR / "customers"
-    customer_dir.mkdir(exist_ok=True)
+    customer_dir = get_share_data_path("customers")
+    if isinstance(customer_dir, Path):
+        customer_dir.mkdir(exist_ok=True)
+    else:
+        Path(customer_dir).mkdir(exist_ok=True)
 
     total_generated = 0
 
@@ -281,7 +342,7 @@ def generate_shared_customers(count=2_000_000, batch_size=10_000):
                 last_name = name_parts[-1]
                 email = f"{fake_vi.user_name()}{i}@gmail.com"
                 phone = fake_vi.phone_number()
-                city = random.choice(["Hà Nội", "TP Hồ Chí Minh", "Đà Nẵng", "Hải Phòng", "Cần Thơ", "Biên Hòa", "Nha Trang"])
+                city = random.choice(["Ha Noi", "TP Ho Chi Minh", "Da Nang", "Hai Phong", "Can Tho", "Bien Hoa", "Nha Trang"])
                 country = "Vietnam"
             else:
                 first_name = fake_en.first_name()
@@ -310,8 +371,8 @@ def generate_shared_customers(count=2_000_000, batch_size=10_000):
             }
             batch_customers.append(customer)
 
-        # Save batch
-        batch_file = customer_dir / f"customers_batch_{batch_num // batch_size}.json.gz"
+        # Save batch to new location
+        batch_file = Path(customer_dir) / f"customers_batch_{batch_num // batch_size}.json.gz"
         save_compressed(batch_customers, batch_file)
 
         total_generated += current_batch_size
@@ -323,12 +384,13 @@ def generate_shared_customers(count=2_000_000, batch_size=10_000):
     GENERATION_STATUS["customers"]["generated"] = True
     GENERATION_STATUS["customers"]["count"] = count
 
-    print(f"✅ Generated {count:,} customers")
+    print(f"Generated {count:,} customers")
     return count
 
 def generate_shared_staff(count=300, mode="replace"):
     """
     Generate staff members for stores
+    Stored in: shared_data/share_data/staff.json.gz
 
     Args:
         count: Number of staff to generate
@@ -342,14 +404,14 @@ def generate_shared_staff(count=300, mode="replace"):
         ensure_staff_loaded()
         if SHARED_STAFF:
             start_id = max(s["id"] for s in SHARED_STAFF) + 1
-            print(f"👥 Appending {count} staff starting from ID {start_id}")
+            print(f"Appending {count} staff starting from ID {start_id}")
         else:
-            print(f"👥 No existing staff found, starting from ID 1")
+            print(f"No existing staff found, starting from ID 1")
 
     positions = [
-        "Nhân viên bán hàng", "Nhân viên tư vấn", "Thu ngân",
-        "Quản lý ca", "Quản lý cửa hàng", "Kỹ thuật viên",
-        "Nhân viên kho", "Trưởng phòng"
+        "Nhan vien ban hang", "Nhan vien tu van", "Thu ngan",
+        "Quan ly ca", "Quan ly cua hang", "Ky thuat vien",
+        "Nhan vien kho", "Truong phong"
     ]
 
     staff = []
@@ -377,8 +439,8 @@ def generate_shared_staff(count=300, mode="replace"):
 
     SHARED_STAFF = all_staff
 
-    # Save to file
-    save_compressed(all_staff, DATA_DIR / "staff.json.gz")
+    # Save to new location
+    save_compressed(all_staff, get_share_data_path("staff.json.gz"))
 
     # Update status
     GENERATION_STATUS["staff"]["generated"] = True
@@ -389,6 +451,7 @@ def generate_shared_staff(count=300, mode="replace"):
 def generate_shared_locations(count=50, mode="replace"):
     """
     Generate Vietnam store locations
+    Stored in: shared_data/share_data/sapo_locations.json.gz
 
     Args:
         count: Number of locations to generate
@@ -402,27 +465,27 @@ def generate_shared_locations(count=50, mode="replace"):
         ensure_locations_loaded()
         if SHARED_LOCATIONS:
             start_id = max(loc["id"] for loc in SHARED_LOCATIONS) + 1
-            print(f"🏪 Appending {count} locations starting from ID {start_id}")
+            print(f"Appending {count} locations starting from ID {start_id}")
         else:
-            print(f"🏪 No existing locations found, starting from ID 1")
+            print(f"No existing locations found, starting from ID 1")
 
     cities = [
-        "Hà Nội", "Hà Nội", "Hà Nội", "Hà Nội", "Hà Nội",
-        "Hà Nội", "Hà Nội", "Hà Nội", "Hà Nội", "Hà Nội",  # 10 stores in Hanoi
-        "TP Hồ Chí Minh", "TP Hồ Chí Minh", "TP Hồ Chí Minh", "TP Hồ Chí Minh", "TP Hồ Chí Minh",
-        "TP Hồ Chí Minh", "TP Hồ Chí Minh", "TP Hồ Chí Minh", "TP Hồ Chí Minh", "TP Hồ Chí Minh",
-        "TP Hồ Chí Minh", "TP Hồ Chí Minh", "TP Hồ Chí Minh", "TP Hồ Chí Minh", "TP Hồ Chí Minh",  # 15 stores in HCMC
-        "Đà Nẵng", "Đà Nẵng", "Đà Nẵng",  # 3 stores
-        "Hải Phòng", "Hải Phòng",  # 2 stores
-        "Cần Thơ", "Cần Thơ",  # 2 stores
-        "Biên Hòa", "Nha Trang", "Huế", "Vũng Tàu", "Buôn Ma Thuột",
-        "Quy Nhơn", "Thái Nguyên", "Vinh", "Nam Định", "Hạ Long",
-        "Phan Thiết", "Long Xuyên", "Thủ Dầu Một", "Pleiku", "Mỹ Tho",
-        "Bến Tre", "Cao Lãnh", "Tây Ninh", "Rạch Giá", "Cà Mau"
+        "Ha Noi", "Ha Noi", "Ha Noi", "Ha Noi", "Ha Noi",
+        "Ha Noi", "Ha Noi", "Ha Noi", "Ha Noi", "Ha Noi",  # 10 stores in Hanoi
+        "TP Ho Chi Minh", "TP Ho Chi Minh", "TP Ho Chi Minh", "TP Ho Chi Minh", "TP Ho Chi Minh",
+        "TP Ho Chi Minh", "TP Ho Chi Minh", "TP Ho Chi Minh", "TP Ho Chi Minh", "TP Ho Chi Minh",
+        "TP Ho Chi Minh", "TP Ho Chi Minh", "TP Ho Chi Minh", "TP Ho Chi Minh", "TP Ho Chi Minh",  # 15 stores in HCMC
+        "Da Nang", "Da Nang", "Da Nang",  # 3 stores
+        "Hai Phong", "Hai Phong",  # 2 stores
+        "Can Tho", "Can Tho",  # 2 stores
+        "Bien Hoa", "Nha Trang", "Hue", "Vung Tau", "Buon Ma Thuot",
+        "Quy Nhon", "Thai Nguyen", "Vinh", "Nam Dinh", "Ha Long",
+        "Phan Thiet", "Long Xuyen", "Thu Dau Mot", "Pleiku", "My Tho",
+        "Ben Tre", "Cao Lanh", "Tay Ninh", "Rach Gia", "Ca Mau"
     ]
 
-    districts_hanoi = ["Hoàn Kiếm", "Đống Đa", "Ba Đình", "Cầu Giấy", "Hai Bà Trưng", "Thanh Xuân", "Long Biên", "Hoàng Mai"]
-    districts_hcmc = ["Quận 1", "Quận 3", "Quận 5", "Quận 10", "Tân Bình", "Phú Nhuận", "Bình Thạnh", "Gò Vấp", "Thủ Đức"]
+    districts_hanoi = ["Hoan Kiem", "Dong Da", "Ba Dinh", "Cau Giay", "Hai Ba Trung", "Thanh Xuan", "Long Bien", "Hoang Mai"]
+    districts_hcmc = ["Quan 1", "Quan 3", "Quan 5", "Quan 10", "Tan Binh", "Phu Nhuan", "Binh Thanh", "Go Vap", "Thu Duc"]
 
     locations = []
     for i in range(count):
@@ -430,12 +493,12 @@ def generate_shared_locations(count=50, mode="replace"):
         # Cycle through cities if count > len(cities)
         city = cities[i % len(cities)]
 
-        if city == "Hà Nội":
+        if city == "Ha Noi":
             district = random.choice(districts_hanoi)
-        elif city == "TP Hồ Chí Minh":
+        elif city == "TP Ho Chi Minh":
             district = random.choice(districts_hcmc)
         else:
-            district = "Trung tâm"
+            district = "Trung tam"
 
         location = {
             "id": location_id,
@@ -464,8 +527,8 @@ def generate_shared_locations(count=50, mode="replace"):
 
     SHARED_LOCATIONS = all_locations
 
-    # Save to file
-    save_compressed(all_locations, DATA_DIR / "sapo_locations.json.gz")
+    # Save to new location
+    save_compressed(all_locations, get_share_data_path("sapo_locations.json.gz"))
 
     # Update status
     GENERATION_STATUS["locations"]["generated"] = True
@@ -476,6 +539,7 @@ def generate_shared_locations(count=50, mode="replace"):
 def generate_shared_shops(count=30, mode="replace"):
     """
     Generate international POS shop configurations
+    Stored in: shared_data/share_data/odoo_shops.json.gz
 
     Args:
         count: Number of shops to generate
@@ -489,9 +553,9 @@ def generate_shared_shops(count=30, mode="replace"):
         ensure_shops_loaded()
         if SHARED_SHOPS:
             start_id = max(shop["id"] for shop in SHARED_SHOPS) + 1
-            print(f"🛍️  Appending {count} shops starting from ID {start_id}")
+            print(f"Appending {count} shops starting from ID {start_id}")
         else:
-            print(f"🛍️  No existing shops found, starting from ID 1")
+            print(f"No existing shops found, starting from ID 1")
 
     cities = [
         ("Singapore", "SGD", "Singapore"),
@@ -560,8 +624,8 @@ def generate_shared_shops(count=30, mode="replace"):
 
     SHARED_SHOPS = all_shops
 
-    # Save to file
-    save_compressed(all_shops, DATA_DIR / "odoo_shops.json.gz")
+    # Save to new location
+    save_compressed(all_shops, get_share_data_path("odoo_shops.json.gz"))
 
     # Update status
     GENERATION_STATUS["shops"]["generated"] = True
@@ -600,104 +664,164 @@ def get_random_shop():
     ensure_shops_loaded()
     return random.choice(SHARED_SHOPS) if SHARED_SHOPS else None
 
+# Customer lookup functions
+def get_customer_by_id(customer_id: int):
+    """Get customer details by ID from batched files"""
+    # Calculate which batch the customer is in
+    batch_size = 10_000
+    batch_num = (customer_id - 1) // batch_size
+
+    # Try new location first
+    customer_dir = get_share_data_path("customers")
+    batch_file = Path(customer_dir) / f"customers_batch_{batch_num}.json.gz"
+
+    # Fallback to old location
+    if not batch_file.exists():
+        batch_file = DATA_DIR / "customers" / f"customers_batch_{batch_num}.json.gz"
+
+    if not batch_file.exists():
+        return None
+
+    customers = load_compressed(batch_file)
+    if not customers:
+        return None
+
+    # Find the customer in the batch
+    for customer in customers:
+        if customer["id"] == customer_id:
+            return customer
+
+    return None
+
+def get_product_by_id(product_id: int):
+    """Get product details by ID"""
+    ensure_products_loaded()
+    for product in SHARED_PRODUCTS:
+        if product["id"] == product_id:
+            return product
+    return None
+
+def get_staff_by_id(staff_id: int):
+    """Get staff details by ID"""
+    ensure_staff_loaded()
+    for staff in SHARED_STAFF:
+        if staff["id"] == staff_id:
+            return staff
+    return None
+
 async def initialize_shared_data():
     """Initialize all shared data on startup"""
     global SHARED_PRODUCTS, SHARED_STAFF, SHARED_LOCATIONS, SHARED_SHOPS
 
-    # Check if data already exists
-    products_file = DATA_DIR / "products.json.gz"
-    staff_file = DATA_DIR / "staff.json.gz"
-    locations_file = DATA_DIR / "sapo_locations.json.gz"
-    shops_file = DATA_DIR / "odoo_shops.json.gz"
+    # Check new location first, then fallback to old location
+    products_file = get_share_data_path("products.json.gz")
+    if not products_file.exists():
+        products_file = DATA_DIR / "products.json.gz"
+
+    staff_file = get_share_data_path("staff.json.gz")
+    if not staff_file.exists():
+        staff_file = DATA_DIR / "staff.json.gz"
+
+    locations_file = get_share_data_path("sapo_locations.json.gz")
+    if not locations_file.exists():
+        locations_file = DATA_DIR / "sapo_locations.json.gz"
+
+    shops_file = get_share_data_path("odoo_shops.json.gz")
+    if not shops_file.exists():
+        shops_file = DATA_DIR / "odoo_shops.json.gz"
 
     if products_file.exists():
-        print("📦 Loading existing products...")
+        print("Loading existing products...")
         SHARED_PRODUCTS = load_compressed(products_file)
         GENERATION_STATUS["products"]["generated"] = True
         GENERATION_STATUS["products"]["count"] = len(SHARED_PRODUCTS)
-        print(f"✅ Loaded {len(SHARED_PRODUCTS)} products from file")
+        print(f"Loaded {len(SHARED_PRODUCTS)} products from file")
     else:
-        print("⚠️  No product data found. Generate via /generate/products endpoint")
+        print("No product data found. Generate via /generate/products endpoint")
 
     if staff_file.exists():
-        print("👥 Loading existing staff...")
+        print("Loading existing staff...")
         SHARED_STAFF = load_compressed(staff_file)
         GENERATION_STATUS["staff"]["generated"] = True
         GENERATION_STATUS["staff"]["count"] = len(SHARED_STAFF)
-        print(f"✅ Loaded {len(SHARED_STAFF)} staff members from file")
+        print(f"Loaded {len(SHARED_STAFF)} staff members from file")
     else:
-        print("⚠️  No staff data found. Generate via /generate/staff endpoint")
+        print("No staff data found. Generate via /generate/staff endpoint")
 
     if locations_file.exists():
-        print("🏪 Loading existing locations...")
+        print("Loading existing locations...")
         SHARED_LOCATIONS = load_compressed(locations_file)
         GENERATION_STATUS["locations"]["generated"] = True
         GENERATION_STATUS["locations"]["count"] = len(SHARED_LOCATIONS)
-        print(f"✅ Loaded {len(SHARED_LOCATIONS)} locations from file")
+        print(f"Loaded {len(SHARED_LOCATIONS)} locations from file")
     else:
-        print("⚠️  No location data found. Generate via /generate/locations endpoint")
+        print("No location data found. Generate via /generate/locations endpoint")
 
     if shops_file.exists():
-        print("🛍️  Loading existing shops...")
+        print("Loading existing shops...")
         SHARED_SHOPS = load_compressed(shops_file)
         GENERATION_STATUS["shops"]["generated"] = True
         GENERATION_STATUS["shops"]["count"] = len(SHARED_SHOPS)
-        print(f"✅ Loaded {len(SHARED_SHOPS)} shops from file")
+        print(f"Loaded {len(SHARED_SHOPS)} shops from file")
     else:
-        print("⚠️  No shop data found. Generate via /generate/shops endpoint")
+        print("No shop data found. Generate via /generate/shops endpoint")
 
-    # Check customers
-    customer_dir = DATA_DIR / "customers"
-    if customer_dir.exists() and list(customer_dir.glob("*.json.gz")):
-        customer_batches = len(list(customer_dir.glob("*.json.gz")))
+    # Check customers in new location first
+    customer_dir = get_share_data_path("customers")
+    if not Path(customer_dir).exists() or not list(Path(customer_dir).glob("*.json.gz")):
+        customer_dir = DATA_DIR / "customers"
+
+    if Path(customer_dir).exists() and list(Path(customer_dir).glob("*.json.gz")):
+        customer_batches = len(list(Path(customer_dir).glob("*.json.gz")))
         estimated_count = customer_batches * 10_000
         GENERATION_STATUS["customers"]["generated"] = True
         GENERATION_STATUS["customers"]["count"] = estimated_count
-        print(f"✅ Found {customer_batches} customer batches (~{estimated_count:,} customers) in files")
+        print(f"Found {customer_batches} customer batches (~{estimated_count:,} customers) in files")
     else:
-        print("⚠️  No customer data found. Generate via /generate/customers endpoint")
+        print("No customer data found. Generate via /generate/customers endpoint")
 
 def clear_generated_data(data_type: str):
     """Clear generated data files"""
     if data_type == "products":
-        products_file = DATA_DIR / "products.json.gz"
-        if products_file.exists():
-            products_file.unlink()
+        # Clear from both locations
+        for filepath in [get_share_data_path("products.json.gz"), DATA_DIR / "products.json.gz"]:
+            if filepath.exists():
+                filepath.unlink()
         GENERATION_STATUS["products"]["generated"] = False
         GENERATION_STATUS["products"]["count"] = 0
         global SHARED_PRODUCTS
         SHARED_PRODUCTS = []
 
     elif data_type == "staff":
-        staff_file = DATA_DIR / "staff.json.gz"
-        if staff_file.exists():
-            staff_file.unlink()
+        for filepath in [get_share_data_path("staff.json.gz"), DATA_DIR / "staff.json.gz"]:
+            if filepath.exists():
+                filepath.unlink()
         GENERATION_STATUS["staff"]["generated"] = False
         GENERATION_STATUS["staff"]["count"] = 0
         global SHARED_STAFF
         SHARED_STAFF = []
 
     elif data_type == "customers":
-        customer_dir = DATA_DIR / "customers"
-        if customer_dir.exists():
-            for file in customer_dir.glob("*.json.gz"):
-                file.unlink()
+        for customer_dir in [get_share_data_path("customers"), DATA_DIR / "customers"]:
+            if Path(customer_dir).exists():
+                for file in Path(customer_dir).glob("*.json.gz"):
+                    file.unlink()
         GENERATION_STATUS["customers"]["generated"] = False
         GENERATION_STATUS["customers"]["count"] = 0
 
     elif data_type == "locations":
-        locations_file = DATA_DIR / "sapo_locations.json.gz"
-        if locations_file.exists():
-            locations_file.unlink()
+        for filepath in [get_share_data_path("sapo_locations.json.gz"), DATA_DIR / "sapo_locations.json.gz"]:
+            if filepath.exists():
+                filepath.unlink()
         GENERATION_STATUS["locations"]["generated"] = False
         GENERATION_STATUS["locations"]["count"] = 0
         global SHARED_LOCATIONS
         SHARED_LOCATIONS = []
 
     elif data_type == "shops":
-        shops_file = DATA_DIR / "odoo_shops.json.gz"
-        if shops_file.exists():
-            shops_file.unlink()
+        for filepath in [get_share_data_path("odoo_shops.json.gz"), DATA_DIR / "odoo_shops.json.gz"]:
+            if filepath.exists():
+                filepath.unlink()
         GENERATION_STATUS["shops"]["generated"] = False
         GENERATION_STATUS["shops"]["count"] = 0
         global SHARED_SHOPS
