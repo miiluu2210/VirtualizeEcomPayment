@@ -10,13 +10,13 @@ from datetime import datetime
 from pathlib import Path as FilePath
 import gzip
 import json
-
-from shared.data_generator import (
-    DATA_DIR, PRIVATE_DIRS, get_share_data_path, get_private_data_path,
-    get_customer_by_id, get_product_by_id, get_staff_by_id,
-    SHARED_PRODUCTS, SHARED_STAFF, SHARED_LOCATIONS, SHARED_SHOPS,
-    ensure_products_loaded, ensure_staff_loaded, ensure_locations_loaded, ensure_shops_loaded
-)
+import shared.data_generator as data_generator
+# from shared.data_generator import (
+#     DATA_DIR, PRIVATE_DIRS, get_share_data_path, get_private_data_path,
+#     get_customer_by_id, get_product_by_id, get_staff_by_id,
+#     SHARED_PRODUCTS, SHARED_STAFF, SHARED_LOCATIONS, SHARED_SHOPS,
+#     ensure_products_loaded, ensure_staff_loaded, ensure_locations_loaded, ensure_shops_loaded
+# )
 
 router = APIRouter()
 
@@ -40,9 +40,9 @@ def search_transactions_across_sources(transaction_id: str):
     results = []
 
     # Search PayPal transactions
-    paypal_file = get_private_data_path("paypal", "transactions.json.gz")
+    paypal_file = data_generator.get_private_data("paypal", "transactions.json.gz")
     if not paypal_file.exists():
-        paypal_file = DATA_DIR / "paypal_transactions" / "transactions.json.gz"
+        paypal_file = data_generator.DATA_DIR / "paypal_transactions" / "transactions.json.gz"
     if paypal_file.exists():
         transactions = load_compressed(paypal_file)
         if transactions:
@@ -52,9 +52,9 @@ def search_transactions_across_sources(transaction_id: str):
                     break
 
     # Search Mercury transactions
-    mercury_file = get_private_data_path("mercury", "transactions.json.gz")
+    mercury_file = data_generator.get_private_data("mercury", "transactions.json.gz")
     if not mercury_file.exists():
-        mercury_file = DATA_DIR / "mercury_transactions" / "transactions.json.gz"
+        mercury_file = data_generator.DATA_DIR / "mercury_transactions" / "transactions.json.gz"
     if mercury_file.exists():
         transactions = load_compressed(mercury_file)
         if transactions:
@@ -64,7 +64,7 @@ def search_transactions_across_sources(transaction_id: str):
                     break
 
     # Search MoMo transactions
-    momo_file = get_private_data_path("momo", "transactions.json.gz")
+    momo_file = data_generator.get_private_data("momo", "transactions.json.gz")
     if momo_file.exists():
         transactions = load_compressed(momo_file)
         if transactions:
@@ -74,7 +74,7 @@ def search_transactions_across_sources(transaction_id: str):
                     break
 
     # Search ZaloPay transactions
-    zalopay_file = get_private_data_path("zalopay", "transactions.json.gz")
+    zalopay_file = data_generator.get_private_data("zalopay", "transactions.json.gz")
     if zalopay_file.exists():
         transactions = load_compressed(zalopay_file)
         if transactions:
@@ -84,9 +84,9 @@ def search_transactions_across_sources(transaction_id: str):
                     break
 
     # Search Shopify orders
-    shopify_dir = get_private_data_path("shopify", "orders")
+    shopify_dir = data_generator.get_private_data("shopify", "orders")
     if not shopify_dir.exists():
-        shopify_dir = DATA_DIR / "shopify_orders"
+        shopify_dir = data_generator.DATA_DIR / "shopify_orders"
     if shopify_dir.exists():
         for batch_file in FilePath(shopify_dir).glob("*.json.gz"):
             orders = load_compressed(batch_file)
@@ -99,9 +99,9 @@ def search_transactions_across_sources(transaction_id: str):
                 break
 
     # Search Sapo orders
-    sapo_dir = get_private_data_path("sapo", "orders")
+    sapo_dir = data_generator.get_private_data("sapo", "orders")
     if not sapo_dir.exists():
-        sapo_dir = DATA_DIR / "sapo_orders"
+        sapo_dir = data_generator.DATA_DIR / "sapo_orders"
     if sapo_dir.exists():
         for batch_file in FilePath(sapo_dir).glob("*.json.gz"):
             orders = load_compressed(batch_file)
@@ -114,9 +114,9 @@ def search_transactions_across_sources(transaction_id: str):
                 break
 
     # Search Odoo orders
-    odoo_dir = get_private_data_path("odoo", "orders")
+    odoo_dir = data_generator.get_private_data("odoo", "orders")
     if not odoo_dir.exists():
-        odoo_dir = DATA_DIR / "odoo_orders"
+        odoo_dir = data_generator.DATA_DIR / "odoo_orders"
     if odoo_dir.exists():
         for batch_file in FilePath(odoo_dir).glob("*.json.gz"):
             orders = load_compressed(batch_file)
@@ -201,7 +201,7 @@ async def get_customer_details(
     - Location
     - Order statistics
     """
-    customer = get_customer_by_id(customer_id)
+    customer = data_generator.get_customer_by_id(customer_id)
 
     if not customer:
         return {
@@ -229,7 +229,7 @@ async def get_employee_details(
     - Contact details
     - Employment status
     """
-    employee = get_staff_by_id(employee_id)
+    employee = data_generator.get_staff_by_id(employee_id)
 
     if not employee:
         return {
@@ -257,7 +257,7 @@ async def get_product_details(
     - Category and brand
     - Stock information
     """
-    product = get_product_by_id(product_id)
+    product = data_generator.get_product_by_id(product_id)
 
     if not product:
         return {
@@ -284,9 +284,9 @@ async def list_products(
     """
     List products with filtering options
     """
-    await ensure_products_loaded()
+    await data_generator.ensure_products_loaded()
 
-    if not SHARED_PRODUCTS:
+    if not data_generator.SHARED_PRODUCTS:
         return {
             "status": "error",
             "msg": "No products data found. Please generate products first.",
@@ -294,7 +294,7 @@ async def list_products(
             "count": 0
         }
 
-    filtered = SHARED_PRODUCTS
+    filtered = data_generator.SHARED_PRODUCTS
 
     if category:
         filtered = [p for p in filtered if p.get("category", "").lower() == category.lower()]
@@ -325,9 +325,9 @@ async def list_employees(
     """
     List employees with filtering options
     """
-    ensure_staff_loaded()
+    data_generator.ensure_staff_loaded()
 
-    if not SHARED_STAFF:
+    if not data_generator.SHARED_STAFF:
         return {
             "status": "error",
             "msg": "No staff data found. Please generate staff first.",
@@ -335,7 +335,7 @@ async def list_employees(
             "count": 0
         }
 
-    filtered = SHARED_STAFF
+    filtered = data_generator.SHARED_STAFF
 
     if position:
         filtered = [s for s in filtered if position.lower() in s.get("position", "").lower()]
@@ -369,12 +369,12 @@ async def list_customers(
     offset_in_batch = offset % batch_size
 
     # Try new location first
-    customer_dir = get_share_data_path("customers")
+    customer_dir = data_generator.get_share_data_path("customers")
     batch_file = FilePath(customer_dir) / f"customers_batch_{batch_num}.json.gz"
 
     # Fallback to old location
     if not batch_file.exists():
-        batch_file = DATA_DIR / "customers" / f"customers_batch_{batch_num}.json.gz"
+        batch_file = data_generator.DATA_DIR / "customers" / f"customers_batch_{batch_num}.json.gz"
 
     if not batch_file.exists():
         return {
@@ -418,9 +418,9 @@ async def list_locations(
     """
     List store locations
     """
-    ensure_locations_loaded()
+    data_generator.ensure_locations_loaded()
 
-    if not SHARED_LOCATIONS:
+    if not data_generator.SHARED_LOCATIONS:
         return {
             "status": "error",
             "msg": "No locations data found. Please generate locations first.",
@@ -428,7 +428,7 @@ async def list_locations(
             "count": 0
         }
 
-    filtered = SHARED_LOCATIONS
+    filtered = data_generator.SHARED_LOCATIONS
     if city:
         filtered = [l for l in filtered if city.lower() in l.get("city", "").lower()]
 
@@ -451,9 +451,9 @@ async def list_shops(
     """
     List international shops
     """
-    ensure_shops_loaded()
+    data_generator.ensure_shops_loaded()
 
-    if not SHARED_SHOPS:
+    if not data_generator.SHARED_SHOPS:
         return {
             "status": "error",
             "msg": "No shops data found. Please generate shops first.",
@@ -461,7 +461,7 @@ async def list_shops(
             "count": 0
         }
 
-    filtered = SHARED_SHOPS
+    filtered = data_generator.SHARED_SHOPS
     if country:
         filtered = [s for s in filtered if country.lower() in s.get("country", "").lower()]
     if currency:

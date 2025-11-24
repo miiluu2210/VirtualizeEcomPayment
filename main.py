@@ -17,7 +17,7 @@ app = FastAPI(
 
     Simulates a complete e-commerce and retail technology store ecosystem similar to GearVN.
     All data sources share consistent metadata for realistic data pipeline development.
-
+    
     ## 🏪 Business Context
     - **Market**: Vietnam technology retail (laptops, gaming gear, components)
     - **Channels**: Online (Shopify) + Offline stores (Sapo POS, Odoo POS)
@@ -53,8 +53,9 @@ app = FastAPI(
     - **80+ Store Locations**
     """,
     contact={
-        "name": "TechStore Vietnam Data Engineering",
-        "email": "dataeng@techstore.vn"
+        "name": "minhngocnguyen",
+        "email": "minh2210.nina@gmail.com",
+        "linkedin": "https://www.linkedin.com/in/minnguyen2210/"
     },
     license_info={
         "name": "MIT License"
@@ -92,7 +93,6 @@ app.include_router(zalopay_router.router, prefix="/zalopay", tags=["ZaloPay E-wa
 app.include_router(lookup_router.router, prefix="/lookup", tags=["Lookup API"])
 app.include_router(cart_tracking_router.router, prefix="/cart", tags=["Cart Tracking"])
 app.include_router(online_orders_router.router, prefix="/online", tags=["Online Orders"])
-
 
 @app.on_event("startup")
 async def startup_event():

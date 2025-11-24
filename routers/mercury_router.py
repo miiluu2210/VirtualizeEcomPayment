@@ -12,12 +12,12 @@ from pathlib import Path
 import gzip
 import json
 import uuid
-from shared.data_generator import generate_transaction_id, DATA_DIR, fake_vi, fake_en
+from shared.data_generator import generate_transaction_id, PRIVATE_DIRS, fake_vi, fake_en
 
 router = APIRouter()
 
 # Configuration
-TRANSACTIONS_DIR = DATA_DIR / "mercury_transactions"
+TRANSACTIONS_DIR = PRIVATE_DIRS["mercury"] #DATA_DIR / "mercury_transactions"
 TRANSACTIONS_DIR.mkdir(exist_ok=True)
 
 ACCOUNTS = []

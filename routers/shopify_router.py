@@ -16,7 +16,7 @@ import shared.data_generator as data_generator
 #     SHARED_PRODUCTS, SHARED_STAFF, SHARED_CUSTOMERS,
 #     get_random_product, get_random_customer, get_random_staff,
 #     generate_transaction_id, generate_shared_products, generate_shared_customers,
-#     generate_shared_staff, DATA_DIR, GENERATION_STATUS,
+#     generate_shared_staff, DATA_DIR, GENERATION_STATUS, PRIVATE_DIRS,
 #     ensure_products_loaded, ensure_staff_loaded
 # )
 #import shared.state as state
@@ -24,10 +24,10 @@ import shared.data_generator as data_generator
 router = APIRouter()
 
 # Configuration
-ORDERS_DIR = data_generator.DATA_DIR / "shopify_orders"
+ORDERS_DIR = data_generator.PRIVATE_DIRS["shopify"] #data_generator.DATA_DIR / "shopify_orders"
 ORDERS_DIR.mkdir(exist_ok=True)
 
-TARGET_ORDERS = 6_000_000
+TARGET_ORDERS = 200_000
 ORDER_BATCH_SIZE = 50_000
 
 generation_status = {

@@ -13,14 +13,14 @@ import gzip
 import json
 from shared.data_generator import (
     SHARED_PRODUCTS, get_random_customer, generate_transaction_id,
-    DATA_DIR, fake_vi, fake_en, GENERATION_STATUS,
+    DATA_DIR, fake_vi, fake_en, GENERATION_STATUS, PRIVATE_DIRS,
     ensure_products_loaded
 )
 
 router = APIRouter()
 
 # Configuration
-TRANSACTIONS_DIR = DATA_DIR / "paypal_transactions"
+TRANSACTIONS_DIR = PRIVATE_DIRS["paypal"]  #/ "paypal_transactions"
 TRANSACTIONS_DIR.mkdir(exist_ok=True)
 
 generation_status = {

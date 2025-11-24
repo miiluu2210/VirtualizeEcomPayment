@@ -15,13 +15,13 @@ from shared.data_generator import (
     SHARED_PRODUCTS, SHARED_STAFF, SHARED_LOCATIONS,
     get_random_product, get_random_customer, get_random_staff, get_random_location,
     generate_transaction_id, generate_shared_locations, DATA_DIR, fake_vi, GENERATION_STATUS,
-    ensure_products_loaded, ensure_staff_loaded, ensure_locations_loaded
+    ensure_products_loaded, ensure_staff_loaded, ensure_locations_loaded, PRIVATE_DIRS
 )
 
 router = APIRouter()
 
 # Configuration
-ORDERS_DIR = DATA_DIR / "sapo_orders"
+ORDERS_DIR = PRIVATE_DIRS["sapo"] #DATA_DIR / "sapo_orders"
 ORDERS_DIR.mkdir(exist_ok=True)
 
 TARGET_ORDERS = 1_000_000
