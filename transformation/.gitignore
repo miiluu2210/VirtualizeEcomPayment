@@ -1,0 +1,11 @@
+# Ignore transformation output files
+output/
+*.parquet
+*.csv
+*.json
+*.txt
+
+# But keep the scripts
+!*.py
+!README.md
+!.gitignore
