@@ -1,0 +1,37 @@
+# Ignore output and temporary files
+output/
+output_*/
+data/
+temp/
+*.parquet
+*.csv
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation (we'll copy what we need)
+*.md
+!README.md
