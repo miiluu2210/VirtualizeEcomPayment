@@ -283,9 +283,9 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Transform cart events data (Big Data version)')
-    parser.add_argument('--input', default='shared_data/private_data/cart_tracking/cart_events.json.gz',
+    parser.add_argument('--input', default='../shared_data/private_data/cart_tracking/cart_events.json.gz',
                        help='Input file path')
-    parser.add_argument('--output', default='transformation/output_bigdata',
+    parser.add_argument('--output', default='output_bigdata',
                        help='Output directory')
     parser.add_argument('--chunk-size', type=int, default=50000,
                        help='Chunk size for processing (default: 50000)')

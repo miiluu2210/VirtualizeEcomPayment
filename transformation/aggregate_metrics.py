@@ -323,7 +323,7 @@ class SessionMetricsAggregator:
 def main():
     """Main execution function."""
     # Configuration
-    INPUT_DIR = "transformation/output"
+    INPUT_DIR = "output"
 
     # Create aggregator and run
     aggregator = SessionMetricsAggregator(INPUT_DIR)

@@ -375,9 +375,9 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Transform cart events (Extreme Big Data version)')
-    parser.add_argument('--input', default='shared_data/private_data/cart_tracking/cart_events.json.gz',
+    parser.add_argument('--input', default='../shared_data/private_data/cart_tracking/cart_events.json.gz',
                        help='Input file path')
-    parser.add_argument('--output', default='transformation/output_extreme',
+    parser.add_argument('--output', default='output_extreme',
                        help='Output directory')
     parser.add_argument('--chunk-size', type=int, default=100000,
                        help='Batch size for processing (default: 100,000)')

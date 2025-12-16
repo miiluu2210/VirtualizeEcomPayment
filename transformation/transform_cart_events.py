@@ -241,8 +241,8 @@ class CartEventsTransformer:
 def main():
     """Main execution function."""
     # Configuration
-    INPUT_FILE = "shared_data/private_data/cart_tracking/cart_events.json.gz"
-    OUTPUT_DIR = "transformation/output"
+    INPUT_FILE = "../shared_data/private_data/cart_tracking/cart_events.json.gz"
+    OUTPUT_DIR = "output"
 
     # Create transformer and run
     transformer = CartEventsTransformer(INPUT_FILE, OUTPUT_DIR)
