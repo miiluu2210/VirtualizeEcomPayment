@@ -1,0 +1,36 @@
+# Dockerfile for Worker with Redis Queue Support
+# For parallel processing with multiple workers
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies + Redis
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir redis rq
+
+# Copy all transformation scripts
+COPY transformation/*.py ./
+
+# Copy worker script
+COPY transformation/docker/worker.py .
+
+# Create data directories
+RUN mkdir -p /data/input /data/output /data/temp
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV REDIS_HOST=redis
+ENV REDIS_PORT=6379
+
+# Run worker
+CMD ["python", "worker.py"]

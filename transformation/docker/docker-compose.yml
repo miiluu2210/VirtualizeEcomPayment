@@ -1,0 +1,30 @@
+# Docker Compose - Simple Single Worker Setup
+# For basic containerized processing
+
+version: '3.8'
+
+services:
+  transformation:
+    build:
+      context: ../..
+      dockerfile: transformation/docker/Dockerfile
+    container_name: cart-transformation
+    volumes:
+      # Mount your data directories
+      - ./data/input:/data/input
+      - ./data/output:/data/output
+    environment:
+      - CHUNK_SIZE=100000
+    mem_limit: 1g
+    cpus: 2
+    restart: "no"
+    command: >
+      python transform_cart_events_extreme.py
+      --input /data/input/cart_events.json.gz
+      --output /data/output
+      --chunk-size ${CHUNK_SIZE:-100000}
+
+# Usage:
+# 1. Place your cart_events.json.gz in ./data/input/
+# 2. Run: docker-compose up
+# 3. Check output in ./data/output/

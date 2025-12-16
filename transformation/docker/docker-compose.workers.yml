@@ -1,0 +1,88 @@
+# Docker Compose - Multiple Workers with Redis Queue
+# For parallel processing of large datasets
+
+version: '3.8'
+
+services:
+  # Redis as task queue
+  redis:
+    image: redis:7-alpine
+    container_name: cart-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Task scheduler - splits work and enqueues jobs
+  scheduler:
+    build:
+      context: ../..
+      dockerfile: transformation/docker/Dockerfile.worker
+    container_name: cart-scheduler
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data/input:/data/input
+      - ./data/output:/data/output
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MODE=scheduler
+      - WORKERS=4
+    command: python scheduler.py
+
+  # Worker pool - processes tasks from queue
+  worker:
+    build:
+      context: ../..
+      dockerfile: transformation/docker/Dockerfile.worker
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data/input:/data/input
+      - ./data/output:/data/output
+      - ./data/temp:/data/temp
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MODE=worker
+    mem_limit: 1g
+    cpus: 1
+    deploy:
+      replicas: 4
+    restart: on-failure
+
+  # Monitoring dashboard (optional)
+  monitor:
+    image: redis/redis-insight:latest
+    container_name: cart-monitor
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+    profiles:
+      - monitoring
+
+volumes:
+  redis-data:
+
+# Usage:
+# 1. Start with 4 workers:
+#    docker-compose -f docker-compose.workers.yml up
+#
+# 2. Scale to 8 workers:
+#    docker-compose -f docker-compose.workers.yml up --scale worker=8
+#
+# 3. With monitoring:
+#    docker-compose -f docker-compose.workers.yml --profile monitoring up
+#
+# 4. View progress:
+#    docker-compose -f docker-compose.workers.yml logs -f worker
