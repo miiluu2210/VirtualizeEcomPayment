@@ -30,8 +30,8 @@ def main():
         logger.info("")
 
         # Configuration
-        INPUT_FILE = "shared_data/private_data/cart_tracking/cart_events.json.gz"
-        OUTPUT_DIR = "transformation/output"
+        INPUT_FILE = "../shared_data/private_data/cart_tracking/cart_events.json.gz"
+        OUTPUT_DIR = "output"
 
         # Step 1: Transformation
         logger.info("STEP 1: Data Transformation")
